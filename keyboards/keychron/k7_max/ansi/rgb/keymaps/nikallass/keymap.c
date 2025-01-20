@@ -43,7 +43,7 @@ static td_tap_t td_state = {
 };
 
 // Timeout period for tap dance (in milliseconds)
-#define TAP_TIMEOUT 300
+#define TAP_TIMEOUT 500
 
 // Handles what happens when tap dance is completed
 void esc_grave_finished(tap_dance_state_t *state, void *user_data) {
