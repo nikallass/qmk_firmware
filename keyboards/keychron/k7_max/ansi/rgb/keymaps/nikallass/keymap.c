@@ -25,35 +25,41 @@ enum layers{
   FN2
 };
 
+// Enum for tap dance state - defines special key combination for ESC/grave
 enum {
     TD_ESC_GRV = 0
 };
 
+// Structure to track the state of tap dance
 typedef struct {
-    bool is_double_tapped;
-    uint16_t timer;
+    bool is_double_tapped;    // Tracks if key was double-tapped
+    uint16_t timer;           // Timer for tracking tap timeout
 } td_tap_t;
 
+// Global state for tap dance
 static td_tap_t td_state = {
     .is_double_tapped = false,
     .timer = 0
 };
 
-#define TAP_TIMEOUT 500
+// Timeout period for tap dance (in milliseconds)
+#define TAP_TIMEOUT 300
 
+// Handles what happens when tap dance is completed
 void esc_grave_finished(tap_dance_state_t *state, void *user_data) {
-    if (state->count >= 2) {  // чтобы любое множественное нажатие (2 и более раз) активировало режим backtick
+    if (state->count >= 2) {  // On double-tap or more
         td_state.is_double_tapped = true;
         td_state.timer = timer_read();
-        // Отправляем два backtick при первой активации режима
+        // Send two backticks on initial activation
         tap_code(KC_GRV);
         tap_code(KC_GRV);
-    } else if (state->count == 1 && 
+    } else if (state->count == 1 &&  // On single tap
                (!td_state.is_double_tapped || timer_elapsed(td_state.timer) >= TAP_TIMEOUT)) {
         tap_code(KC_ESC);
     }
 }
 
+// Resets tap dance state when timeout is reached
 void esc_grave_reset(tap_dance_state_t *state, void *user_data) {
     if (timer_elapsed(td_state.timer) >= TAP_TIMEOUT) {
         td_state.is_double_tapped = false;
@@ -65,10 +71,21 @@ tap_dance_action_t tap_dance_actions[] = {
 };
 
 bool process_record_user(uint16_t keycode, keyrecord_t *record) {
+    // Get current state of all modifier keys (Shift, Ctrl, Alt, GUI/CMD)
     uint8_t mods = get_mods();
 
     if (keycode == TD(TD_ESC_GRV)) {
-        // Сначала проверяем модификаторы, независимо от режима backtick
+        // Handle CMD+SHIFT+ESC combination
+        // When pressed, outputs CMD+SHIFT+grave (tilda)
+        if ((mods & MOD_MASK_GUI) && (mods & MOD_MASK_SHIFT)) {
+            if (record->event.pressed) {
+                tap_code16(G(S(KC_GRV)));
+            }
+            return false;
+        }
+
+        // Handle SHIFT+ESC combination
+        // When pressed, outputs grave (`)
         if ((mods & MOD_MASK_SHIFT) && !(mods & ~MOD_MASK_SHIFT)) {
             if (record->event.pressed) {
                 unregister_mods(MOD_MASK_SHIFT);
@@ -77,6 +94,9 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
             }
             return false;
         }
+
+        // Handle ALT+ESC combination
+        // When pressed, outputs SHIFT+grave (tilda)
         if ((mods & MOD_MASK_ALT) && !(mods & ~MOD_MASK_ALT)) {
             if (record->event.pressed) {
                 unregister_mods(MOD_MASK_ALT);
@@ -85,6 +105,9 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
             }
             return false;
         }
+
+        // Handle CMD/GUI+ESC combination
+        // When pressed, outputs CMD+grave
         if ((mods & MOD_MASK_GUI) && !(mods & ~MOD_MASK_GUI)) {
             if (record->event.pressed) {
                 tap_code16(G(KC_GRV));
@@ -92,9 +115,11 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
             return false;
         }
 
-        // Затем проверяем режим backtick только если нет модификаторов
-        if (!mods && td_state.is_double_tapped && 
-            timer_elapsed(td_state.timer) < TAP_TIMEOUT && 
+        // Handle double-tap backtick mode
+        // If ESC was double-tapped earlier and we're still within the timeout period,
+        // continue outputting backticks for each subsequent press
+        if (!mods && td_state.is_double_tapped &&
+            timer_elapsed(td_state.timer) < TAP_TIMEOUT &&
             record->event.pressed) {
             tap_code(KC_GRV);
             td_state.timer = timer_read();
@@ -102,10 +127,12 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
         }
     }
 
+    // Process Keychron-specific keyboard functions
     if (!process_record_keychron_common(keycode, record)) {
         return false;
     }
 
+    // If none of the above conditions are met, process the key normally
     return true;
 }
 
